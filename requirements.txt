@@ -1,0 +1,5 @@
+requests
+python-telegram-bot
+praw
+youtube-search
+youtube-search-python
