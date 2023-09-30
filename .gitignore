@@ -1,1 +1,4 @@
 token.txt
+.env
+conversationbot
+main.py

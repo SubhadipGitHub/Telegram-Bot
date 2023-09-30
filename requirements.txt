@@ -3,3 +3,4 @@ python-telegram-bot
 praw
 youtube-search
 youtube-search-python
+python-dotenv
