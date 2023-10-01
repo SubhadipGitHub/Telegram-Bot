@@ -20,10 +20,10 @@
 <br>
 5)Docker Commands
 * Build Docker image from the dockerfile
-docker build -t python-docker . 
+docker build -t python-docker-telegram . 
 
 * Run docker container from image
-docker container run -dit -p 80:80 python-docker
+docker container run -dit -p 80:80 python-docker-telegram
 
 * Delete all image,container and volumes
 docker system prune -a --volumes

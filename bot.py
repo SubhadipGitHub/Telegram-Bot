@@ -1,5 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup,Update,ForceReply,KeyboardButton,ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler,ConversationHandler,CallbackContext
+from youtube_search import YoutubeSearch
 from warnings import filterwarnings
 from telegram.warnings import PTBUserWarning
 import praw
@@ -34,10 +35,12 @@ weather_api_key = os.getenv('weather_api')
 
 #Static values
 ENTER_CITY = 0
+ENTER_YOUTUBE_SEARCH=0
 SELECT_OPTION,ENTER_LANGUAGE,ENTER_TOPIC=range(3)
 ADD_WEATHER_CITY_PROMPT= "Please provide the city for which you want to check weather:"
 ADD_CODE_TOPIC_PROMPT="Please provide the topic for programming language concept:"
 ADD_CODE_LANG_PROMPT="Please provide the programming language for which you want to know about:"
+ADD_SEARCH_YT_PROMPT="Please provide the search for youtube video:"
 
 #Enojis
 thunderstorm = u'\U0001F4A8'    # Code: 200's, 900, 901, 902, 905
@@ -104,6 +107,12 @@ async def weather_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     await update.message.reply_text(f"Hi {user.first_name}! {ADD_WEATHER_CITY_PROMPT}")
     return ENTER_CITY
+
+async def search_youtube_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
+    """Sends a message with button to take custom input of youtube search"""
+    user = update.message.from_user
+    await update.message.reply_text(f"Hi {user.first_name}! {ADD_SEARCH_YT_PROMPT}")
+    return ENTER_YOUTUBE_SEARCH
 
 async def search_code_command(update:Update,context: CallbackContext) -> int:
     """Sends a message with 2 inline buttons attached."""
@@ -218,6 +227,19 @@ def handle_response(text: str) -> str:
     #Bot logic to reply intelligently
     custom_response = 'I am not sure what you want.Please check menu of commands.'
     return custom_response
+
+async def find_youtube_handler(update: Update,context: CallbackContext):
+    """This is the handler to get input for city weather"""
+    user_message = update.message.text
+    search_yt=user_message
+    """Find youtube videos easily"""
+    try:
+        results = YoutubeSearch(search_yt, max_results=1).to_dict()
+        ytd_url = "https://www.youtube.com" + str(results[0].get("url_suffix"))
+        await update.message.reply_text(ytd_url)
+    except:
+        await update.message.reply_text(f'Try again!! Could not find {search_yt}')
+    return ConversationHandler.END
 
 async def add_city_handler(update: Update,context: CallbackContext):
     """This is the handler to get input for city weather"""
@@ -366,16 +388,11 @@ async def handle_message(update: Update,context: ContextTypes.DEFAULT_TYPE):
         else:
             return
     else:
-        if choice == "topic":
-            await find_topic_handler(update,context)
-        elif choice == "language":
-            await find_lang_handler(update,context)
-        else:
-            return            
-            #response:str=handle_response(text)
+        return            
+        response:str=handle_response(text)
 
     #print(f'Bot: {response}')
-    #await update.message.reply_text(response)
+    await update.message.reply_text(response)
 
 #error handler
 async def error(update:Update,context:ContextTypes.DEFAULT_TYPE):
@@ -391,13 +408,19 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('rmemes',rmemes_command))
     app.add_handler(CommandHandler('news',news_command))
     app.add_handler(CommandHandler('jokes',jokes_command))
-    app.add_handler(CommandHandler('search_code',search_code_command))
 
     #conversation handler
     conv_handler_weather = ConversationHandler(
         entry_points=[CommandHandler('weather',weather_command)],
         states={
             ENTER_CITY:[MessageHandler(filters.ALL & ~filters.COMMAND, add_city_handler)]
+        },
+        fallbacks=[]
+    )
+    conv_handler_yt=ConversationHandler(
+        entry_points=[CommandHandler('search_youtube',search_youtube_command)],
+        states={
+            ENTER_CITY:[MessageHandler(filters.ALL & ~filters.COMMAND, find_youtube_handler)]
         },
         fallbacks=[]
     )
@@ -412,6 +435,7 @@ if __name__ == '__main__':
     )
     app.add_handler(conv_handler_weather)
     app.add_handler(conv_handler_code)  
+    app.add_handler(conv_handler_yt)
 
     #callback
     app.add_handler(CallbackQueryHandler(button)) 
