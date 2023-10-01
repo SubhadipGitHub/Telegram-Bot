@@ -1,16 +1,23 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup,Update,ForceReply,KeyboardButton,ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler,ConversationHandler,CallbackContext
+from warnings import filterwarnings
+from telegram.warnings import PTBUserWarning
 import praw
 import requests
 import random
 import os
 from dotenv import load_dotenv
 
+#Supress warnings
+filterwarnings(action="ignore", message=r".*CallbackQueryHandler", category=PTBUserWarning)
+
+#Secrets
 load_dotenv()
 
 telegram_token = os.getenv('client_token')
 telegram_botname = os.getenv('botname')
 
+#creds
 red_client_id = os.getenv('red_client_id')
 red_client_token = os.getenv('red_client_token')
 reddit = praw.Reddit(client_id=red_client_id,
@@ -27,7 +34,7 @@ weather_api_key = os.getenv('weather_api')
 
 #Static values
 ENTER_CITY = 0
-ENTER_LANGUAGE,ENTER_TOPIC=range(0,2)
+SELECT_OPTION,ENTER_LANGUAGE,ENTER_TOPIC=range(3)
 ADD_WEATHER_CITY_PROMPT= "Please provide the city for which you want to check weather:"
 ADD_CODE_TOPIC_PROMPT="Please provide the topic for programming language concept:"
 ADD_CODE_LANG_PROMPT="Please provide the programming language for which you want to know about:"
@@ -98,7 +105,7 @@ async def weather_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Hi {user.first_name}! {ADD_WEATHER_CITY_PROMPT}")
     return ENTER_CITY
 
-async def search_code_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
+async def search_code_command(update:Update,context: CallbackContext) -> int:
     """Sends a message with 2 inline buttons attached."""
     keyboard = [
         [
@@ -110,6 +117,7 @@ async def search_code_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text("Please choose the programming topic/language:", reply_markup=reply_markup)
+    return SELECT_OPTION
 
 async def jokes_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     """Gets the best jokes"""
@@ -126,39 +134,14 @@ async def jokes_command(update:Update,context:ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(responsegetjoke[0].get("joke","No joke for you today!!"))
 
 #Callbacks
-async def search_code_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+async def button(update: Update, context: CallbackContext) -> int:
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
 
     # CallbackQueries need to be answered, even if no notification to the user is needed
     # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
     await query.answer()
-
-    #await query.edit_message_text(text=f"Selected option: {query.data}")
-    if query.data.lower() == "topic":
-        print('topic button selected')
-        #do something        
-        await query.edit_message_text(text=f'You selected {query.data.lower()}')
-        return ENTER_TOPIC
-    elif query.data.lower() == "language":
-        print('language button selected')
-        #do something
-        print("do something2")
-        await query.edit_message_text(text=f'You select {query.data.lower()}')
-        return ENTER_LANGUAGE
-    else:
-        return ConversationHandler.END  
-
-
-
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Parses the CallbackQuery and updates the message text."""
-    query = update.callback_query
-
-    # CallbackQueries need to be answered, even if no notification to the user is needed
-    # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
-    await query.answer()
-
+    context.user_data["choice"] = query.data
     #await query.edit_message_text(text=f"Selected option: {query.data}")
     if query.data.lower() == "tech":
             complete_news_url = complete_news_url_tech
@@ -215,15 +198,15 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         else:
             await query.edit_message_text(text="No news in INDIA!!")
     elif query.data.lower() == "topic":
-        print('topic button selected')
+        #print('topic button selected')
         #do something        
-        await query.edit_message_text(text=f'You selected {query.data.lower()}')
+        await query.edit_message_text(text=f'You selected `{query.data.lower()}`.\nPlease provide the programming topic you want to lean about:')
         return ENTER_TOPIC
     elif query.data.lower() == "language":
-        print('language button selected')
+        #print('language button selected')
         #do something
-        print("do something2")
-        await query.edit_message_text(text=f'You select {query.data.lower()}')
+        #print("do something2")
+        await query.edit_message_text(text=f'You selected `{query.data.lower()}`.\nPlease provide the programming language you want to learn concepts on:')
         return ENTER_LANGUAGE
     else:
         await query.edit_message_text(text="Please check category specified or check help and Try Again!")
@@ -235,24 +218,6 @@ def handle_response(text: str) -> str:
     #Bot logic to reply intelligently
     custom_response = 'I am not sure what you want.Please check menu of commands.'
     return custom_response
-
-async def handle_message(update: Update,context: ContextTypes.DEFAULT_TYPE):
-    message_type: str= update.message.chat.type
-    text:str=update.message.text
-
-    print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
-
-    if message_type =='group':
-        if telegram_botname in text:
-            new_text:str=text.replace(telegram_botname,'').strip()
-            response:str=handle_response(new_text)
-        else:
-            return
-    else:
-        response:str=handle_response(text)
-
-    print(f'Bot: {response}')
-    await update.message.reply_text(response)
 
 async def add_city_handler(update: Update,context: CallbackContext):
     """This is the handler to get input for city weather"""
@@ -320,8 +285,9 @@ async def add_city_handler(update: Update,context: CallbackContext):
 
 async def find_topic_handler(update: Update,context: CallbackContext):
     """This is the handler to get input for search code topic"""
-    user_message = update.message.text
-    search_query = user_message
+    #print("topic handler")
+    user_message = update.message.text    
+    search_query = user_message.lower()
     max= 3
     url = "https://syntaxdb.com/api/v1/concepts/search?q="+str(search_query)
     responseGET = requests.get(url)
@@ -345,28 +311,71 @@ async def find_topic_handler(update: Update,context: CallbackContext):
 
 async def find_lang_handler(update: Update,context: CallbackContext):
     """This is the handler to get input for search programming language topic"""
+    #print("language handler")
     user_message = update.message.text
-    language=user_message
+    language=user_message.lower()
     url = "https://syntaxdb.com/api/v1/languages/"+language+"/concepts"
     responseGET = requests.get(url)
     responseGET = responseGET.json()
+    #print(responseGET)
     max = 3
     answerGET = "```````````\n \N{Circled Information Source} " + str(language) + "\n```````````\n"
-    if (len(responseGET) < max):
-        for item in range(len(responseGET)):
-            itemLang = responseGET[item].get("concept_search", "NA")
-            itemSyntax = responseGET[item].get("syntax", "NA")
-            itemdoc = responseGET[item].get("documentation", "NA")
-            itemdesc = responseGET[item].get("description", "NA")
-            itemnotes = responseGET[item].get("notes", "NA")
-            try:
-                itemdocurl = itemdoc.split('"')[1]
-            except:
-                itemdocurl = "NA"
-            answerGET = answerGET + "\n`Language` : " + str(itemLang) + "\n`Syntax` : " + str(
-                itemSyntax) + "\n Link : {} \n-------------------------------\n".format(itemdocurl)
-    await update.message.reply_text(answerGET)
+    try:
+        if (len(responseGET) < max):
+            for item in range(len(responseGET)):
+                itemLang = responseGET[item].get("concept_search", "NA")
+                itemSyntax = responseGET[item].get("syntax", "NA")
+                itemdoc = responseGET[item].get("documentation", "NA")
+                itemdesc = responseGET[item].get("description", "NA")
+                itemnotes = responseGET[item].get("notes", "NA")
+                try:
+                    itemdocurl = itemdoc.split('"')[1]
+                except:
+                    itemdocurl = "NA"
+                answerGET = answerGET + "\n`Language` : " + str(itemLang) + "\n`Syntax` : " + str(
+                    itemSyntax) + "\n Link : {} \n-------------------------------\n".format(itemdocurl)
+        else:
+            for item in range(0, max):
+                itemLang = responseGET[item]["concept_search"]
+                itemSyntax = responseGET[item]["syntax"]
+                itemdoc = responseGET[item].get("documentation", "NA")
+                itemdesc = responseGET[item].get("description", "NA")
+                itemnotes = responseGET[item].get("notes", "NA")
+                try:
+                    itemdocurl = itemdoc.split('"')[1]
+                except:
+                    itemdocurl = "NA"
+                answerGET = answerGET + "\n`Language` : " + str(itemLang) + "\n`Syntax` : " + str(
+                    itemSyntax) + "\n Link : {} \n-------------------------------\n".format(itemdocurl)
+        await update.message.reply_text(answerGET)
+    except Exception as e:
+        await update.message.reply_text(f'Failed to Retrieve any concepts for programming language provided : {language}')
     return ConversationHandler.END
+
+async def handle_message(update: Update,context: ContextTypes.DEFAULT_TYPE):
+    message_type: str= update.message.chat.type
+    text:str=update.message.text
+    choice = context.user_data["choice"]
+
+    #print(f'User ({update.message.chat.id}) in {message_type}: "{text}"')
+
+    if message_type =='group':
+        if telegram_botname in text:
+            new_text:str=text.replace(telegram_botname,'').strip()
+            response:str=handle_response(new_text)
+        else:
+            return
+    else:
+        if choice == "topic":
+            await find_topic_handler(update,context)
+        elif choice == "language":
+            await find_lang_handler(update,context)
+        else:
+            return            
+            #response:str=handle_response(text)
+
+    #print(f'Bot: {response}')
+    #await update.message.reply_text(response)
 
 #error handler
 async def error(update:Update,context:ContextTypes.DEFAULT_TYPE):
@@ -395,8 +404,9 @@ if __name__ == '__main__':
     conv_handler_code=ConversationHandler(
         entry_points=[CommandHandler('search_code',search_code_command)],
         states={
-            ENTER_TOPIC:[MessageHandler(filters.ALL & ~filters.COMMAND, find_topic_handler)],
-            ENTER_LANGUAGE:[MessageHandler(filters.ALL & ~filters.COMMAND, find_lang_handler)],
+            SELECT_OPTION: [CallbackQueryHandler(button)],
+            ENTER_TOPIC:[MessageHandler(filters.TEXT & ~filters.COMMAND, find_topic_handler)],
+            ENTER_LANGUAGE:[MessageHandler(filters.TEXT & ~filters.COMMAND, find_lang_handler)],
         },
         fallbacks=[]
     )
